@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project name="SignupAcceptanceTests" default="deploy">
+  <!-- The IP address of the host to deploy to. Other hosts include -CD14 and -CD15 -->
+  <property name="host.target" value="QA-VM-CD14"/>
+  <!-- The UNC path to the share where we'll copy files to -->
+  <property name="dir.share" value="\\${host.target}\go"/>
+  <!-- Get the name of the build from Go -->
+  <property name="buildname" value="${environment::get-variable('GO_PIPELINE_LABEL')}"/>
+  <!-- Path to PsTools, download from http://technet.microsoft.com/en-us/sysinternals/bb897553 -->
+  <property name="dir.pstools" value="\Tools\psTools"/>
+  
+  <target name="clean">
+    <description>
+      Removes the directory on the share if one exists matching the current build name.
+    </description>
+    <delete dir="${dir.share}\${buildname}"/>
+  </target>
+
+  <target name="deploy" depends="clean">
+    <description>
+      Deploys the built code to the server using a UNC copy.
+    </description>
+    <!-- Make sure the directory exists on the target share -->
+    <mkdir dir="${dir.share}\${buildname}"/>
+    <!-- Copy the artifacts from Go to the target share -->
+    <copy todir="${dir.share}\${buildname}" overwrite="true" verbose="true">
+      <fileset basedir="Binaries\_PublishedWebSites">
+        <include name="**\*.*"/>
+        <exclude name="**\.svn"/>
+      </fileset>
+    </copy>
+
+    <!--
+    <exec program="${dir.pstools}\psexec.exe" failonerror="false" resultproperty="copyresult">
+      <arg line="/accepteula"/>
+      <arg line="\\${host.target}"/>
+      <arg line="-u"/>
+      <arg line="DOMAIN\user"/>
+      <arg line="-p"/>
+      <arg line="password"/>
+      <arg line="cmd"/>
+      <arg line="/C"/>
+      <arg line="dir"/>
+      <arg line="D:\go_artifacts"/>
+    </exec>
+    <fail message="There was an error copying the files to IIS" unless="${int::parse(copyresult)==0}"/>
+    -->
+  </target>
+</project>
+
