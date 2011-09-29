@@ -1,0 +1,94 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<project name="MyProject" default="build">
+	<property name="dir.build" value="${project::get-base-directory()}\dst"/>
+	<property name="msbuild.exe" value="C:\Windows\Microsoft.NET\Framework\v4.0.30319\MSBuild.exe"/>
+	<property name="sln" value="path\to\your\Solution.sln"/>
+
+	<target name="compile">
+		<description>
+		Compile the solution file using msbuild. Required properties:
+		msbuild.exe		The full path to the msbuild.exe file
+		sln				The path/name of your solution file
+		</description>
+
+		<!-- Compile to the bin folder-->
+		<exec program="${msbuild.exe}" failonerror="false" resultproperty="buildresult">
+			<arg line="${sln}"/>
+			<arg line="/property:Configuration=Release"/>
+			<!-- Other args you may want to consider
+			<arg value="/property:Configuration=Release;PreBuildEvent=;PostBuildEvent=;AdditionalLibPaths=${AdditionalLibrariesDirectory}" />
+			<arg line="/property:OutDir=${dir.build}\${dir.bin}/"/>
+			-->
+			<arg value="/target:rebuild" />
+			<arg line="/nologo"/>
+		</exec>
+		<fail message="Errors found while building ${sln}." unless="${int::parse(buildresult)==0}"/>
+	</target>
+
+	<target name="build" depends="compile,unit-tests"/>
+
+	<target name="unit-tests">
+		<description>
+		Run the unit tests with MSTest. Required properties:
+		TestOutputDir	The path to the directory for collecting test output
+		TestOutputFile	The name of the composite test output filename
+		TRX2HTMLExe		The full path (including filename) to the exe to transform TRX files
+		</description>
+
+		<!--
+				Loop over all dlls in Release folders in the solution directory
+				and try to run unit tests on each one. If there are no tests in
+				the assembly you get a No tests to execute message. If there are 
+				tests, it runs them.
+		-->
+		<foreach item="File" property="filename">
+			<in>
+				<items>
+					<include name="${dir.build}\**\bin\Release\*.dll" />
+				</items>
+			</in>
+			<do>
+				<!-- Execute all test projects except for the SmokeTest group -->
+				<if test="${bool::parse(string::contains(filename, 'SmokeTest')) == false}">
+					<!-- Determine the name of the trx file -->
+					<regex pattern="^(?'path'.*(\\|/)|(/|\\))(?'TRXfilename'.*)$" input="${filename}" />
+					<property name="TRXFile" value="${TestOutputDir}\${TRXfilename}.trx" />
+					<echo message="ResultsFile: ${TRXFile}" />
+
+					<!-- Run mstest.exe -->
+					<exec program="${mstest.exe}" failonerror="false" resultproperty="result">
+						<arg line="/testcontainer:${filename}"/>
+						<arg line="/resultsfile:${TRXFile}/"/>
+						<arg line="/detail:outcometext"/>
+						<arg line="/detail:errormessage"/>
+						<arg line="/nologo"/>
+					</exec>
+					<echo message="Test run return value: ${result}"/>
+					<property name="TestResult" value="${result}" unless="${int::parse(result) == 0}"/>
+					<if test="${file::exists(TRXFile)}">
+						<exec program="${TRX2HTMLExe}" >
+							<arg value="${TRXFile}" />
+						</exec>
+					</if>
+				</if>
+			</do>
+		</foreach>
+
+		<!--
+			Join all the test output files into a single file. The single file
+			is then used in a pipeline tool for feedback.
+		-->
+		<concat destfile="${TestOutputFile}" append="true">
+			<fileset>
+				<include name="${TestOutputDir}\*.htm" />
+			</fileset>
+		</concat>
+
+		<!-- Check to see if the TestResult property has a non-zero value, indicating failure. -->
+		<fail if="${int::parse(TestResult) > 0}" message="Test run failed." />
+	</target>
+
+	<target name="static-analysis">
+		<echo message="Not implemented"/>
+	</target>
+</project>
